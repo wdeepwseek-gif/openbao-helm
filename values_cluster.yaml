@@ -1,0 +1,452 @@
+# Source: openbao/templates/_helpers.tpl
+apiVersion: v2
+name: openbao
+description: Official OpenBao Chart
+version: 0.7.0
+appVersion: 2.3
+kubeVersion: '>= 1.22.0-0'
+home: https://github.com/openbao/openbao-helm
+sources:
+  - https://github.com/openbao/openbao-helm
+keywords:
+  - vault
+  - openbao
+  - security
+  - encryption
+  - secrets
+  - management
+  - automation
+  - infrastructure
+maintainers:
+  - name: OpenBao
+    email: openbao-security@lists.lfedge.org
+    url: https://openbao.org
+icon: https://github.com/openbao/artwork/blob/main/color/openbao-color.svg
+annotations:
+  charts.openshift.io/name: Openbao
+
+global:
+  # -- master enabled switch
+  enabled: true
+  # -- namespace to deploy to
+  namespace: "openbao"
+  # -- image pull secrets
+  imagePullSecrets: []
+  # -- disable TLS
+  tlsDisable: true
+  # -- not OpenShift
+  openshift: false
+  # -- external vault address (empty for internal deployment)
+  externalVaultAddr: ""
+  # -- PodSecurityPolicy
+  psp:
+    enable: false
+  # -- Prometheus Operator integration
+  serverTelemetry:
+    prometheusOperator: false
+
+# OpenBao Agent Injector
+injector:
+  enabled: true
+  replicas: 1
+  port: 8080
+  
+  leaderElector:
+    enabled: true
+  
+  metrics:
+    enabled: false
+  
+  image:
+    registry: "docker.io"
+    repository: "hashicorp/vault-k8s"
+    tag: "1.4.2"
+    pullPolicy: IfNotPresent
+  
+  agentImage:
+    registry: "docker.io"
+    repository: "openbao/openbao"
+    tag: "2.3"
+    pullPolicy: IfNotPresent
+  
+  agentDefaults:
+    cpuLimit: "500m"
+    cpuRequest: "250m"
+    memLimit: "128Mi"
+    memRequest: "64Mi"
+    template: "map"
+    templateConfig:
+      exitOnRetryFailure: true
+      staticSecretRenderInterval: ""
+  
+  logLevel: "info"
+  logFormat: "standard"
+  revokeOnShutdown: false
+  authPath: "auth/kubernetes"
+  
+  webhook:
+    failurePolicy: Ignore
+    matchPolicy: Exact
+    timeoutSeconds: 30
+    namespaceSelector: {}
+    objectSelector: |
+      matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: NotIn
+        values:
+        - openbao-agent-injector
+    annotations: {}
+  
+  certs:
+    secretName: null
+    caBundle: ""
+    certName: "tls.crt"
+    keyName: "tls.key"
+  
+  securityContext:
+    pod: {}
+    container: {}
+  
+  resources: {}
+  
+  extraEnvironmentVars: {}
+  
+  affinity: |
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: openbao-agent-injector
+              app.kubernetes.io/instance: "openbao"
+              component: webhook
+          topologyKey: kubernetes.io/hostname
+  
+  topologySpreadConstraints: []
+  tolerations: []
+  nodeSelector: {}
+  priorityClassName: ""
+  annotations: {}
+  extraLabels: {}
+  hostNetwork: false
+  
+  service:
+    annotations: {}
+  
+  serviceAccount:
+    annotations: {}
+  
+  podDisruptionBudget: {}
+  strategy: {}
+
+# OpenBao Server with Raft
+server:
+  enabled: true
+  
+  image:
+    registry: "docker.io"
+    repository: "openbao/openbao"
+    tag: "2.3"
+    pullPolicy: IfNotPresent
+  
+  updateStrategyType: "OnDelete"
+  logLevel: ""
+  logFormat: ""
+  
+  resources: {}
+  
+  ingress:
+    enabled: false
+    labels: {}
+    annotations: {}
+    ingressClassName: ""
+    pathType: "Prefix"
+    activeService: true
+    hosts:
+      - host: openbao.example.com
+        paths: []
+    extraPaths: []
+    tls: []
+  
+  hostAliases: []
+  
+  route:
+    enabled: false
+    activeService: true
+    labels: {}
+    annotations: {}
+    host: "openbao.example.com"
+    tls:
+      termination: "passthrough"
+  
+  authDelegator:
+    enabled: true
+  
+  extraInitContainers: []
+  extraContainers: null
+  shareProcessNamespace: false
+  extraArgs: ""
+  extraPorts: []
+  
+  readinessProbe:
+    enabled: true
+    port: 8200
+    failureThreshold: 2
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  
+  livenessProbe:
+    enabled: false
+    execCommand: []
+    path: "/v1/sys/health?standbyok=true"
+    port: 8200
+    failureThreshold: 2
+    initialDelaySeconds: 60
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  
+  terminationGracePeriodSeconds: 10
+  preStopSleepSeconds: 5
+  postStart: []
+  
+  extraEnvironmentVars: {}
+  
+  extraSecretEnvironmentVars: []
+  
+  extraVolumes: []
+  
+  volumes: null
+  volumeMounts: null
+  
+  affinity: |
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: openbao
+              app.kubernetes.io/instance: "openbao"
+              component: server
+          topologyKey: kubernetes.io/hostname
+  
+  topologySpreadConstraints: []
+  tolerations: []
+  nodeSelector: {}
+  
+  networkPolicy:
+    enabled: false
+    egress: []
+    ingress:
+      - from:
+          - namespaceSelector: {}
+        ports:
+          - port: 8200
+            protocol: TCP
+          - port: 8201
+            protocol: TCP
+  
+  priorityClassName: ""
+  extraLabels: {}
+  annotations: {}
+  configAnnotation: false
+  
+  service:
+    enabled: true
+    active:
+      enabled: true
+      annotations: {}
+    standby:
+      enabled: true
+      annotations: {}
+    instanceSelector:
+      enabled: true
+    clusterIP: ""
+    type: "ClusterIP"
+    ipFamilyPolicy: ""
+    ipFamilies: []
+    publishNotReadyAddresses: true
+    externalTrafficPolicy: "Cluster"
+    nodePort: 0
+    activeNodePort: 0
+    standbyNodePort: 0
+    port: 8200
+    targetPort: 8200
+    annotations: {}
+  
+  dataStorage:
+    enabled: true
+    size: "10Gi"
+    mountPath: "/openbao/data"
+    storageClass: null
+    accessMode: "ReadWriteOnce"
+    annotations: {}
+    labels: {}
+  
+  persistentVolumeClaimRetentionPolicy: {}
+  
+  auditStorage:
+    enabled: false
+    size: "10Gi"
+    mountPath: "/openbao/audit"
+    storageClass: null
+    accessMode: "ReadWriteOnce"
+    annotations: {}
+    labels: {}
+  
+  dev:
+    enabled: false
+    devRootToken: "root"
+  
+  standalone:
+    enabled: false
+  
+  # RAFT CONFIGURATION
+  ha:
+    enabled: true
+    replicas: 3
+    
+    apiAddr: null
+    clusterAddr: null
+    
+    raft:
+      enabled: true
+      setNodeId: true
+    
+    config: |
+      ui = true
+      disable_mlock = true
+      
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      
+      storage "raft" {
+        path = "/openbao/data"
+      }
+      
+      service_registration "kubernetes" {}
+      
+      telemetry {
+        prometheus_retention_time = "30s"
+        disable_hostname = true
+      }
+    
+    disruptionBudget:
+      enabled: true
+      maxUnavailable: null
+  
+  serviceAccount:
+    create: true
+    name: ""
+    createSecret: false
+    annotations: {}
+    extraLabels: {}
+    serviceDiscovery:
+      enabled: true
+  
+  statefulSet:
+    annotations: {}
+    securityContext:
+      pod: {}
+      container: {}
+  
+  hostNetwork: false
+
+# OpenBao UI Service
+ui:
+  enabled: true
+  publishNotReadyAddresses: true
+  activeOpenbaoPodOnly: false
+  serviceType: "NodePort"
+  serviceNodePort: 0
+  externalPort: 8200
+  targetPort: 8200
+  serviceIPFamilyPolicy: ""
+  serviceIPFamilies: []
+  externalTrafficPolicy: "Cluster"
+  annotations: {}
+
+# CSI Provider
+csi:
+  enabled: true
+  
+  image:
+    registry: "docker.io"
+    repository: "hashicorp/vault-csi-provider"
+    tag: "1.4.0"
+    pullPolicy: "IfNotPresent"
+  
+  volumes: []
+  volumeMounts: []
+  resources: {}
+  hmacSecretName: ""
+  
+  daemonSet:
+    updateStrategy:
+      type: "RollingUpdate"
+      maxUnavailable: ""
+    annotations: {}
+    providersDir: "/etc/kubernetes/secrets-store-csi-providers"
+    kubeletRootDir: "/var/lib/kubelet"
+    extraLabels: {}
+    securityContext:
+      pod: {}
+      container: {}
+  
+  pod:
+    annotations: {}
+    tolerations: []
+    nodeSelector: {}
+    affinity: {}
+    extraLabels: {}
+  
+  agent:
+    enabled: true
+    extraArgs: []
+    image:
+      registry: "docker.io"
+      repository: "openbao/openbao"
+      tag: "2.3"
+      pullPolicy: "IfNotPresent"
+    logFormat: "standard"
+    logLevel: "info"
+    resources: {}
+  
+  priorityClassName: ""
+  
+  serviceAccount:
+    annotations: {}
+    extraLabels: {}
+  
+  readinessProbe:
+    failureThreshold: 2
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  
+  livenessProbe:
+    failureThreshold: 2
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  
+  debug: false
+  extraArgs: []
+
+# Telemetry and Monitoring
+serverTelemetry:
+  serviceMonitor:
+    enabled: false
+    selectors: {}
+    interval: "30s"
+    scrapeTimeout: "10s"
+  
+  prometheusRules:
+    enabled: false
+    selectors: {}
+    rules: []
